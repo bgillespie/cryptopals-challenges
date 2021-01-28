@@ -1,3 +1,2 @@
-pub mod base64;
-pub mod fixed_xor;
+pub mod bytes;
 pub mod utils;

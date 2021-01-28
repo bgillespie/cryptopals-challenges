@@ -1,7 +1,43 @@
-//! # base64
-//!
-//! `base64` just provides the `encode` function currently, per the first
-//! Cryptopals set, challenge 1.
+//! Various byte or byte collection manipulations.
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum HexParseError {
+    #[error("Invalid characters in input")]
+    ParseError,
+    #[error("Input's length must be a multiple of 2")]
+    InputError,
+}
+
+pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, HexParseError> {
+    if hex.len() % 2 != 0 {
+        Err(HexParseError::InputError)
+    } else {
+        (0..hex.len())
+            .step_by(2)
+            .map(|d| u8::from_str_radix(&hex[d..=d + 1], 16))
+            .collect::<Result<Vec<u8>, _>>()
+            .map_err(|_| HexParseError::ParseError)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum FixedXorError {
+    #[error("Sources differ in their lengths")]
+    SourcesDifferingLength,
+}
+
+/// Take two sequences of bytes of the same length and XOR them together.
+pub fn fixed_xor(a: &[u8], b: &[u8]) -> Result<Vec<u8>, FixedXorError> {
+    if a.len() != b.len() {
+        Err(FixedXorError::SourcesDifferingLength)
+    } else {
+        Ok(a.iter().zip(b.iter()).map(|(l, r)| *l ^ *r).collect())
+    }
+}
+
+// Base64 stuff
 
 const BASE64: [char; 64] = [
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S',
@@ -74,9 +110,52 @@ pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
     result
 }
 
+//
+// TESTS
+//
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_hex_to_bytes() {
+        // First: tests not resulting in errors
+        let tests = [
+            ("", vec![]),
+            ("00", vec![0u8]),
+            ("FF", vec![255u8]),
+            ("ff", vec![255u8]),
+            (
+                "000102030405060708090a0b0c0d0e0f10",
+                vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            ),
+        ];
+
+        for (sample, expected) in tests.iter() {
+            let actual = hex_to_bytes(sample);
+            assert_eq!(expected, &actual.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_fixed_xor() {
+        let tests = [
+            ("", "", ""),
+            (
+                "1c0111001f010100061a024b53535009181c",
+                "686974207468652062756c6c277320657965",
+                "746865206b696420646f6e277420706c6179",
+            ),
+        ];
+        for &(a, b, expected) in tests.iter() {
+            let a = hex_to_bytes(a).unwrap();
+            let b = hex_to_bytes(b).unwrap();
+            let expected = hex_to_bytes(expected).unwrap();
+            let actual = fixed_xor(&a, &b).unwrap();
+            assert_eq!(expected, actual);
+        }
+    }
 
     #[test]
     fn test_encode() {
