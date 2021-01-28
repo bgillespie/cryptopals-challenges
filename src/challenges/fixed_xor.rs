@@ -6,8 +6,7 @@ pub enum FixedXorError {
 pub fn fixed_xor(a: &[u8], b: &[u8]) -> Result<Vec<u8>, FixedXorError> {
     if a.len() != b.len() {
         Err(FixedXorError::SourcesDifferingLength)
-    }
-    else {
+    } else {
         Ok(a.iter().zip(b.iter()).map(|(l, r)| *l ^ *r).collect())
     }
 }
@@ -25,8 +24,8 @@ mod test {
             (
                 "1c0111001f010100061a024b53535009181c",
                 "686974207468652062756c6c277320657965",
-                "746865206b696420646f6e277420706c6179"
-            )
+                "746865206b696420646f6e277420706c6179",
+            ),
         ];
         for &(a, b, expected) in tests.iter() {
             let a = hex_to_bytes(a).unwrap();

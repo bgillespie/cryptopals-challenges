@@ -20,7 +20,22 @@ const BASE64: [char; 64] = [
 /// assert_eq!("/wARIkSIqrvM3e7/AA==", result);
 /// ```
 pub fn encode(bytes: &[u8]) -> String {
-    let mut result = String::new();
+    let encoded_bytes = encode_bytes(bytes);
+    let mut result = encoded_bytes
+        .iter()
+        .map(|&b| BASE64[b as usize])
+        .collect::<String>();
+
+    // Pad the output to a multiple of 4
+    while result.len() % 4 != 0 {
+        result.push('=');
+    }
+
+    result
+}
+
+pub fn encode_bytes(bytes: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity((bytes.len() * 4) / 3);
     let mut index: usize = 0;
 
     // Whizz through the easy bits: if you have a clear three bytes available
@@ -29,10 +44,10 @@ pub fn encode(bytes: &[u8]) -> String {
     let mut intermediate: u32;
     while index + 2 < bytes.len() {
         intermediate = (0..=2).fold(0u32, |acc, i| acc << 8 | bytes[index + i] as u32);
-        result.push(BASE64[((intermediate >> 18) & 63) as usize]);
-        result.push(BASE64[((intermediate >> 12) & 63) as usize]);
-        result.push(BASE64[((intermediate >> 6) & 63) as usize]);
-        result.push(BASE64[((intermediate) & 63) as usize]);
+        result.push(((intermediate >> 18) & 63) as u8);
+        result.push(((intermediate >> 12) & 63) as u8);
+        result.push(((intermediate >> 6) & 63) as u8);
+        result.push(((intermediate) & 63) as u8);
         index += 3;
     }
 
@@ -40,26 +55,20 @@ pub fn encode(bytes: &[u8]) -> String {
 
     // If there's a first byte it'll have its six bits in there verbatim.
     if bytes.len() % 3 > 0 {
-        result.push(BASE64[((bytes[index] >> 2) & 63) as usize]);
+        result.push(((bytes[index] >> 2) & 63) as u8);
 
-        // The remaining two bits have to be included in whatever follows
-        intermediate = ((bytes[index] << 4) & 48) as u32;
-        // If there's a next byte we take the high bits of that too
+        // The remaining two bits have to be included in whatever follows and if
+        // there's a next byte we take the high four bits of that too.
+        let mut intermediate = (bytes[index] << 4) & 48;
         if bytes.len() % 3 > 1 {
-            intermediate |= ((bytes[index + 1] >> 4) & 15) as u32;
+            intermediate |= (bytes[index + 1] >> 4) & 15;
         }
-        result.push(BASE64[intermediate as usize]);
+        result.push(intermediate);
 
-        // Now if there _was_ a next byte...
+        // If there _was_ a next byte, there's only four bits to take account of.
         if bytes.len() % 3 > 1 {
-            // ... add the remaining bits as the higher bits of the final number
-            result.push(BASE64[((bytes[index] << 2) & 60) as usize]);
+            result.push((bytes[index] << 2) & 60);
         }
-    }
-
-    // Pad the output to a multiple of 4
-    while result.len() % 4 != 0 {
-        result.push('=');
     }
 
     result
@@ -80,8 +89,10 @@ mod test {
             (vec![255u8, 255], "//8="),
             (vec![255u8, 255, 255], "////"),
             (
-                vec![255u8, 0, 0x11, 0x22, 0x44, 0x88, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0],
-                "/wARIkSIqrvM3e7/AA=="
+                vec![
+                    255u8, 0, 0x11, 0x22, 0x44, 0x88, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0,
+                ],
+                "/wARIkSIqrvM3e7/AA==",
             ),
             (
                 vec![

@@ -1,5 +1,4 @@
 ///! Some random stuff
-
 use std::num::ParseIntError;
 
 #[derive(Debug)]
