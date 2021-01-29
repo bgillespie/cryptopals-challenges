@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::Rezult;
+
 #[derive(Error, Debug)]
 pub enum HexParseError {
     #[error("Invalid characters in input")]
@@ -10,6 +12,7 @@ pub enum HexParseError {
     InputError,
 }
 
+/// Turn a string of hex into an array of bytes.
 pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, HexParseError> {
     if hex.len() % 2 != 0 {
         Err(HexParseError::InputError)
@@ -21,6 +24,13 @@ pub fn hex_to_bytes(hex: &str) -> Result<Vec<u8>, HexParseError> {
             .map_err(|_| HexParseError::ParseError)
     }
 }
+
+/// Turn an array of bytes into a hex string.
+pub fn bytes_to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+// FixedXor
 
 #[derive(Error, Debug)]
 pub enum FixedXorError {
@@ -34,6 +44,45 @@ pub fn fixed_xor(a: &[u8], b: &[u8]) -> Result<Vec<u8>, FixedXorError> {
         Err(FixedXorError::SourcesDifferingLength)
     } else {
         Ok(a.iter().zip(b.iter()).map(|(l, r)| *l ^ *r).collect())
+    }
+}
+
+/// Repeating-key XOR. If key is empty, output is empty.
+/// `phase` is used to offset the beginning of the key, i.e. `1` will start at
+/// second element.
+pub fn repeating_key_xor(bytes: &[u8], key: &[u8], phase: usize) -> Vec<u8> {
+    bytes
+        .iter()
+        .zip(key.iter().cycle().skip(phase))
+        .map(|(b, k)| *b ^ *k)
+        .collect()
+}
+
+// Hamming things
+
+#[derive(Debug, Error)]
+pub enum HammingError {
+    #[error("Inputs must be equal length")]
+    BadInputLength
+}
+
+/// Count bits in a byte
+// https://stackoverflow.com/a/9947267
+pub fn hamming_weight(x: u8) -> u8 {
+    let x = x as u64;
+    (((0x876543210u64 >>
+      (((0x4332322132212110u64 >> ((x & 0xF) << 2)) & 0xF) << 2)) >>
+       ((0x4332322132212110u64 >> (((x & 0xF0) >> 2)) & 0xF) << 2))
+      & 0xf) as u8
+}
+
+/// Hamming distance
+pub fn hamming_distance(a: &[u8], b: &[u8]) -> Rezult<usize> {
+    if a.len() != b.len() {
+        Err(Box::new(HammingError::BadInputLength))
+    }
+    else {
+        Ok(a.iter().zip(b.iter()).map(|(i, j)| hamming_weight(i ^ j) as usize).sum())
     }
 }
 
@@ -119,6 +168,21 @@ mod test {
     use super::*;
 
     #[test]
+    fn test_hamming_distance() {
+        let a = "this is a test".as_bytes();
+        let b = "wokka wokka!!!".as_bytes();
+        assert_eq!(37usize, hamming_distance(a, b).unwrap());
+    }
+
+    #[test]
+    fn test_bytes_to_hex() {
+        let source = vec![0u8, 255];
+        let expected = "00ff";
+        let actual = bytes_to_hex(&source);
+        assert_eq!(expected, &actual);
+    }
+
+    #[test]
     fn test_hex_to_bytes() {
         // First: tests not resulting in errors
         let tests = [
@@ -136,6 +200,28 @@ mod test {
             let actual = hex_to_bytes(sample);
             assert_eq!(expected, &actual.unwrap());
         }
+    }
+
+    #[test]
+    fn test_repeating_key_xor() {
+        let tests = [
+            (vec![], vec![], vec![]),
+            (vec![], vec![1u8, 2, 3, 4], vec![]),
+            (vec![1u8], vec![], vec![]),
+            (vec![1u8], vec![1u8, 2, 3, 4], vec![0u8, 3, 2, 5]),
+            (vec![1u8, 2], vec![1u8, 2, 3, 4], vec![0u8, 0, 2, 6]),
+            (vec![1u8, 2, 3, 4], vec![1u8, 2, 3, 4], vec![0u8, 0, 0, 0]),
+            (vec![1u8, 2, 3, 4], vec![1u8, 2], vec![0u8, 0]),
+        ];
+        for (key, source, expected) in tests.iter() {
+            let actual = repeating_key_xor(source, key, 0);
+            assert_eq!(expected, &actual);
+        }
+
+        // Check phase capability
+        let actual = repeating_key_xor(&vec![1u8, 2, 3, 4], &vec![1u8, 2, 3, 4], 1);
+        let expected = vec![3u8, 1, 7, 5];
+        assert_eq!(expected, actual);
     }
 
     #[test]
