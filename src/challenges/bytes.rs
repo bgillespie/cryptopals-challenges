@@ -63,26 +63,28 @@ pub fn repeating_key_xor(bytes: &[u8], key: &[u8], phase: usize) -> Vec<u8> {
 #[derive(Debug, Error)]
 pub enum HammingError {
     #[error("Inputs must be equal length")]
-    BadInputLength
+    BadInputLength,
 }
 
-/// Count bits in a byte
-// https://stackoverflow.com/a/9947267
+/// Count bits in a byte.
+///
+/// If this gets too slow I'll use a multibyte version later. This one will do
+/// for now.
+///
 pub fn hamming_weight(x: u8) -> u8 {
-    let x = x as u64;
-    (((0x876543210u64 >>
-      (((0x4332322132212110u64 >> ((x & 0xF) << 2)) & 0xF) << 2)) >>
-       ((0x4332322132212110u64 >> (((x & 0xF0) >> 2)) & 0xF) << 2))
-      & 0xf) as u8
+    const NYBBLE_BIT_COUNTS: [u8; 16] = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4];
+    NYBBLE_BIT_COUNTS[(x & 0xf) as usize] + NYBBLE_BIT_COUNTS[(x >> 4) as usize]
 }
 
 /// Hamming distance
 pub fn hamming_distance(a: &[u8], b: &[u8]) -> Rezult<usize> {
     if a.len() != b.len() {
         Err(Box::new(HammingError::BadInputLength))
-    }
-    else {
-        Ok(a.iter().zip(b.iter()).map(|(i, j)| hamming_weight(i ^ j) as usize).sum())
+    } else {
+        Ok(a.iter()
+            .zip(b.iter())
+            .map(|(i, j)| hamming_weight(i ^ j) as usize)
+            .sum())
     }
 }
 
